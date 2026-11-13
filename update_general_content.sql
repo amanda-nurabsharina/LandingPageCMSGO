@@ -132,3 +132,4 @@ WHERE id = 2;
 UPDATE landing_sections SET title = 'Layanan Kami (Services)' WHERE section_key = 'services';
 UPDATE landing_sections SET title = 'Alur Kerja (Work Steps)' WHERE section_key = 'timeline';
 UPDATE landing_sections SET title = 'Testimoni Klien & Mitra' WHERE section_key = 'testimonials';
+
