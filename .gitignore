@@ -1,0 +1,21 @@
+# Binaries
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Environment file
+.env
+
+# Storage uploaded files
+/storage/public/*
+!/storage/public/.gitignore
+

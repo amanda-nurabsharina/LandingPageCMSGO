@@ -1,0 +1,36 @@
+{{define "content"}}
+<h1 class="text-2xl font-bold mb-6">Dashboard</h1>
+
+{{with .User}}
+<div class="bg-white rounded-xl border border-slate-200 p-6 mb-8 flex items-center gap-4">
+  <div class="w-12 h-12 rounded-full bg-primary-600 text-white flex items-center justify-center text-lg font-bold">{{initial .Name}}</div>
+  <div>
+    <div class="text-sm text-slate-500">Selamat datang</div>
+    <div class="font-semibold text-lg">{{.Name}}</div>
+  </div>
+</div>
+{{end}}
+
+<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">Konten</h2>
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
+  {{range .Cards}}
+  <a href="{{.URL}}" class="bg-white rounded-xl border border-slate-200 p-5 hover:border-primary-500 hover:shadow-sm transition flex items-center justify-between">
+    <div>
+      <div class="text-sm text-slate-500">{{.Label}}</div>
+      <div class="text-3xl font-bold mt-1">{{.Count}}</div>
+    </div>
+    <i data-lucide="{{.Icon}}" class="w-8 h-8 text-primary-600"></i>
+  </a>
+  {{end}}
+</div>
+
+<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">Pengaturan</h2>
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  {{range .Settings}}
+  <a href="{{.URL}}" class="bg-white rounded-xl border border-slate-200 p-5 hover:border-primary-500 hover:shadow-sm transition flex items-center gap-3">
+    <i data-lucide="{{.Icon}}" class="w-6 h-6 text-primary-600"></i>
+    <span class="font-semibold">{{.Label}}</span>
+  </a>
+  {{end}}
+</div>
+{{end}}

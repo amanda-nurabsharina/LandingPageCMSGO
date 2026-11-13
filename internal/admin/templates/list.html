@@ -1,0 +1,95 @@
+{{define "content"}}
+{{$r := .Resource}}
+<div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+  <h1 class="text-2xl font-bold">{{$r.Label}}</h1>
+  <a href="/admin/{{$r.Slug}}/create" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold px-4 py-2">
+    <i data-lucide="plus" class="w-4 h-4"></i> New {{$r.Singular}}
+  </a>
+</div>
+
+<div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+  <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
+    <button type="submit" form="bulk-form" id="bulk-delete-btn" disabled
+            onclick="return confirm('Hapus data yang dipilih?')"
+            class="inline-flex items-center gap-2 rounded-lg border border-red-200 text-red-600 text-sm font-semibold px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-red-50">
+      <i data-lucide="trash-2" class="w-4 h-4"></i> Delete selected
+    </button>
+    <form method="GET" action="/admin/{{$r.Slug}}" class="flex items-center gap-2">
+      <div class="relative">
+        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+        <input type="search" name="q" value="{{.Query}}" placeholder="Search"
+               class="pl-9 pr-3 py-1.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+      </div>
+    </form>
+  </div>
+
+  <form id="bulk-form" method="POST" action="/admin/{{$r.Slug}}/bulk-delete">
+    <input type="hidden" name="_csrf" value="{{.CSRF}}">
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 text-left text-slate-600">
+          <tr>
+            <th class="w-10 px-4 py-3"><input type="checkbox" id="check-all" class="rounded border-slate-300"></th>
+            {{range .Headers}}
+            <th class="px-4 py-3 font-semibold whitespace-nowrap">
+              {{if .Sortable}}
+              <a href="{{.URL}}" class="inline-flex items-center gap-1 hover:text-primary-600">
+                {{.Label}}
+                {{if .Active}}{{if eq .Dir "asc"}}<i data-lucide="chevron-up" class="w-4 h-4"></i>{{else}}<i data-lucide="chevron-down" class="w-4 h-4"></i>{{end}}{{else}}<i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 text-slate-400"></i>{{end}}
+              </a>
+              {{else}}{{.Label}}{{end}}
+            </th>
+            {{end}}
+            <th class="px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {{range .Rows}}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-3"><input type="checkbox" name="ids" value="{{.ID}}" class="row-check rounded border-slate-300"></td>
+            {{range .Cells}}
+            <td class="px-4 py-3">
+              {{if eq .Kind "image"}}
+                {{if .URL}}<img src="{{.URL}}" alt="" class="w-12 h-12 object-cover rounded">{{else}}<div class="w-12 h-12 rounded bg-slate-100"></div>{{end}}
+              {{else if eq .Kind "stars"}}
+                <span class="text-amber-500 tracking-wider">{{.Text}}</span>
+              {{else}}
+                {{.Text}}
+              {{end}}
+            </td>
+            {{end}}
+            <td class="px-4 py-3 text-right">
+              <a href="{{.EditURL}}" class="inline-flex items-center gap-1 text-primary-600 font-semibold hover:underline">
+                <i data-lucide="pencil" class="w-4 h-4"></i> Edit
+              </a>
+            </td>
+          </tr>
+          {{else}}
+          <tr><td colspan="99" class="px-4 py-12 text-center text-slate-500">Belum ada data.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </form>
+
+  <div class="flex items-center justify-between px-4 py-3 border-t border-slate-100 text-sm text-slate-600">
+    <div>Total {{.Total}} data · Halaman {{.Page}} dari {{.Pages}}</div>
+    <div class="flex gap-2">
+      {{if .PrevURL}}<a href="{{.PrevURL}}" class="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50">Sebelumnya</a>{{end}}
+      {{if .NextURL}}<a href="{{.NextURL}}" class="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50">Berikutnya</a>{{end}}
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const all = document.getElementById('check-all');
+    const btn = document.getElementById('bulk-delete-btn');
+    const rows = () => Array.from(document.querySelectorAll('.row-check'));
+    const sync = () => { btn.disabled = !rows().some(c => c.checked); };
+    all && all.addEventListener('change', () => { rows().forEach(c => c.checked = all.checked); sync(); });
+    rows().forEach(c => c.addEventListener('change', sync));
+  })();
+</script>
+{{end}}
+

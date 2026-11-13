@@ -1,0 +1,150 @@
+{{define "content"}}
+{{$r := .Resource}}
+{{$f := .Form}}
+<div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+  <div>
+    {{if not $r.Singleton}}
+    <a href="/admin/{{$r.Slug}}" class="text-sm text-slate-500 hover:text-primary-600 inline-flex items-center gap-1 mb-1">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i> {{$r.Label}}
+    </a>
+    {{end}}
+    <h1 class="text-2xl font-bold">{{.Title}}</h1>
+  </div>
+  {{if .DeleteURL}}
+  <form method="POST" action="{{.DeleteURL}}" onsubmit="return confirm('Hapus data ini?')">
+    <input type="hidden" name="_csrf" value="{{.CSRF}}">
+    <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2">
+      <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
+    </button>
+  </form>
+  {{end}}
+</div>
+
+<form method="POST" action="{{.Action}}" enctype="multipart/form-data" class="bg-white rounded-xl border border-slate-200 p-6">
+  <input type="hidden" name="_csrf" value="{{.CSRF}}">
+  <div class="grid gap-6 md:grid-cols-2">
+    {{range $r.Fields}}
+    {{$err := index $f.Errors .Name}}
+    <div class="{{if or .Full (eq (printf "%s" .Type) "image")}}md:col-span-2{{end}}">
+      <label for="f_{{.Name}}" class="block text-sm font-medium text-slate-700 mb-1">
+        {{.DisplayLabel}}{{if .Required}} <span class="text-red-500">*</span>{{end}}
+      </label>
+
+      {{if eq (printf "%s" .Type) "textarea"}}
+        <textarea id="f_{{.Name}}" name="{{.Name}}" rows="4" placeholder="{{.Placeholder}}" {{if .Required}}required{{end}}
+          class="w-full rounded-lg border {{if $err}}border-red-400{{else}}border-slate-300{{end}} px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500">{{index $f.Values .Name}}</textarea>
+
+      {{else if eq (printf "%s" .Type) "select"}}
+        {{$val := index $f.Values .Name}}
+        <select id="f_{{.Name}}" name="{{.Name}}" {{if .Required}}required{{end}}
+          class="w-full rounded-lg border {{if $err}}border-red-400{{else}}border-slate-300{{end}} px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+          {{if not .Required}}<option value="">-</option>{{end}}
+          {{range .Options}}<option value="{{.Value}}" {{if eq .Value $val}}selected{{end}}>{{.Label}}</option>{{end}}
+        </select>
+
+      {{else if eq (printf "%s" .Type) "tags"}}
+        <div class="tags-input rounded-lg border {{if $err}}border-red-400{{else}}border-slate-300{{end}} px-2 py-2 flex flex-wrap gap-2 focus-within:ring-2 focus-within:ring-primary-500" data-name="{{.Name}}">
+          {{$fname := .Name}}
+          {{range index $f.Tags .Name}}
+          <span class="tag inline-flex items-center gap-1 rounded-md bg-primary-50 text-primary-700 text-sm px-2 py-1">
+            <span>{{.}}</span>
+            <input type="hidden" name="{{$fname}}" value="{{.}}">
+            <button type="button" class="tag-remove text-primary-700/70 hover:text-red-600">&times;</button>
+          </span>
+          {{end}}
+          <input id="f_{{.Name}}" type="text" placeholder="{{.Placeholder}}" class="tag-entry flex-1 min-w-[10rem] outline-none text-sm px-1 py-1">
+        </div>
+
+      {{else if eq (printf "%s" .Type) "image"}}
+        {{$img := index $f.Images .Name}}
+        <div class="flex flex-wrap items-start gap-4">
+          <div class="w-40 h-28 rounded-lg border border-dashed border-slate-300 bg-slate-50 overflow-hidden flex items-center justify-center">
+            <img data-preview="{{.Name}}" src="{{if $img}}{{storageURL $img}}{{end}}" alt="" class="w-full h-full object-cover {{if not $img}}hidden{{end}}">
+            <i data-lucide="image" data-placeholder="{{.Name}}" class="w-8 h-8 text-slate-300 {{if $img}}hidden{{end}}"></i>
+          </div>
+          <div class="space-y-2">
+            <input id="f_{{.Name}}" type="file" name="{{.Name}}" accept="image/*" data-image-input="{{.Name}}"
+              class="block text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-primary-50 file:px-3 file:py-2 file:text-primary-700 file:font-semibold hover:file:bg-primary-100">
+            <p class="text-xs text-slate-500">JPG, PNG, GIF, WEBP · maks 10 MB</p>
+            {{if and $img (not .Required)}}
+            <label class="inline-flex items-center gap-2 text-sm text-red-600">
+              <input type="checkbox" name="remove_{{.Name}}" value="1" class="rounded border-slate-300"> Hapus gambar saat ini
+            </label>
+            {{end}}
+          </div>
+        </div>
+
+      {{else if eq (printf "%s" .Type) "toggle"}}
+        <label class="inline-flex items-center gap-2 cursor-pointer mt-1">
+          <input type="checkbox" name="{{.Name}}" value="true" {{if eq (index $f.Values .Name) "true"}}checked{{end}}
+            class="w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500">
+          <span class="text-sm text-slate-700">{{.DisplayLabel}}</span>
+        </label>
+
+      {{else if eq (printf "%s" .Type) "readonly"}}
+        <div class="p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm text-slate-800 whitespace-pre-wrap">
+          {{index $f.Values .Name}}
+        </div>
+
+      {{else}}
+        <input id="f_{{.Name}}" name="{{.Name}}" value="{{index $f.Values .Name}}" placeholder="{{.Placeholder}}" {{if .Required}}required{{end}}
+          type="{{if eq (printf "%s" .Type) "number"}}number{{else if eq (printf "%s" .Type) "email"}}email{{else if eq (printf "%s" .Type) "url"}}url{{else}}text{{end}}"
+          class="w-full rounded-lg border {{if $err}}border-red-400{{else}}border-slate-300{{end}} px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500">
+      {{end}}
+
+      {{if $err}}<p class="mt-1 text-sm text-red-600">{{$err}}</p>{{end}}
+    </div>
+    {{end}}
+  </div>
+
+  <div class="mt-8 flex items-center gap-3">
+    <button type="submit" class="rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-semibold px-5 py-2">
+      {{if .IsEdit}}Save changes{{else}}Create{{end}}
+    </button>
+    {{if not $r.Singleton}}
+    <a href="/admin/{{$r.Slug}}" class="rounded-lg border border-slate-300 px-5 py-2 font-semibold text-slate-700 hover:bg-slate-50">Cancel</a>
+    {{end}}
+  </div>
+</form>
+
+<script>
+  // Tags input (TagsInput replacement): type and press Enter to add.
+  document.querySelectorAll('.tags-input').forEach(function (box) {
+    const name = box.dataset.name;
+    const entry = box.querySelector('.tag-entry');
+    const bindRemove = (tag) => tag.querySelector('.tag-remove').addEventListener('click', () => tag.remove());
+    box.querySelectorAll('.tag').forEach(bindRemove);
+    const add = (value) => {
+      value = value.trim();
+      if (!value) return;
+      const tag = document.createElement('span');
+      tag.className = 'tag inline-flex items-center gap-1 rounded-md bg-primary-50 text-primary-700 text-sm px-2 py-1';
+      const label = document.createElement('span'); label.textContent = value;
+      const hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = name; hidden.value = value;
+      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'tag-remove text-primary-700/70 hover:text-red-600'; btn.innerHTML = '&times;';
+      tag.append(label, hidden, btn);
+      box.insertBefore(tag, entry);
+      bindRemove(tag);
+    };
+    entry.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(entry.value); entry.value = ''; }
+      else if (e.key === 'Backspace' && entry.value === '') { const tags = box.querySelectorAll('.tag'); if (tags.length) tags[tags.length - 1].remove(); }
+    });
+    entry.closest('form').addEventListener('submit', () => { add(entry.value); entry.value = ''; });
+  });
+
+  // Image preview
+  document.querySelectorAll('[data-image-input]').forEach(function (input) {
+    input.addEventListener('change', () => {
+      const name = input.dataset.imageInput;
+      const img = document.querySelector('[data-preview="' + name + '"]');
+      const ph = document.querySelector('[data-placeholder="' + name + '"]');
+      if (input.files && input.files[0]) {
+        img.src = URL.createObjectURL(input.files[0]);
+        img.classList.remove('hidden');
+        ph && ph.classList.add('hidden');
+      }
+    });
+  });
+</script>
+{{end}}
