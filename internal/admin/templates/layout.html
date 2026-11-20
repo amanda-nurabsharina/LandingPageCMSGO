@@ -3,76 +3,138 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{.Title}} · {{.AppName}} Admin</title>
+  <title>{{.Title}} · {{.AppName}}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = { theme: { extend: { colors: { primary: { 50:'#ecfdf5', 100:'#d1fae5', 500:'#10b981', 600:'#059669', 700:'#047857' } } } } }
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: { 50:'#ecfdf5', 100:'#d1fae5', 500:'#10b981', 600:'#059669', 700:'#047857' }
+          }
+        }
+      }
+    }
   </script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased">
+<body class="bg-[#f8fafc] text-slate-800 antialiased font-sans">
 <div class="min-h-screen flex">
   <!-- Sidebar -->
-  <aside id="sidebar" class="fixed inset-y-0 left-0 z-30 w-64 -translate-x-full lg:translate-x-0 transition-transform bg-white border-r border-slate-200 flex flex-col">
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-30 w-64 -translate-x-full lg:translate-x-0 transition-transform bg-white border-r border-slate-200/80 flex flex-col">
     <div class="h-16 flex items-center px-6 border-b border-slate-100">
-      <a href="/admin" class="text-lg font-bold text-primary-600">{{.AppName}}</a>
+      <a href="/admin" class="text-base font-bold text-slate-900 tracking-tight">{{.AppName}}</a>
     </div>
-    <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-3">
-      <a href="/admin" class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold {{if eq .Active "dashboard"}}bg-primary-50 text-primary-600{{else}}text-slate-700 hover:bg-slate-50{{end}}">
-        <i data-lucide="layout-dashboard" class="w-5 h-5"></i><span>Dashboard</span>
+    <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-2">
+      <a href="/admin" class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition {{if eq .Active "dashboard"}}bg-emerald-50 text-emerald-600 font-semibold{{else}}text-slate-600 hover:bg-slate-50 hover:text-slate-900{{end}}">
+        <i data-lucide="house" class="w-4 h-4"></i><span>Dashboard</span>
       </a>
+
+      {{range .UngroupedNav}}
+      <a href="/admin/{{.Slug}}" class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition {{if eq .Slug $.Active}}bg-emerald-50 text-emerald-600 font-semibold{{else}}text-slate-600 hover:bg-slate-50 hover:text-slate-900{{end}}">
+        <i data-lucide="{{.Icon}}" class="w-4 h-4"></i><span>{{.Label}}</span>
+      </a>
+      {{end}}
+
       {{range .GroupedNav}}
-      <div>
-        <div class="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">{{.Group}}</div>
-        <div class="space-y-0.5">
+      {{$isGroupActive := false}}
+      {{range .Items}}
+        {{if eq .Slug $.Active}}{{$isGroupActive = true}}{{end}}
+      {{end}}
+      <div class="nav-group pt-2" data-group="{{.Group}}">
+        <button type="button" class="group-toggle w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-600 transition select-none">
+          <span class="uppercase tracking-wider">{{.Group}}</span>
+          <i data-lucide="chevron-up" class="w-3.5 h-3.5 text-slate-400 chevron-icon transition-transform"></i>
+        </button>
+        <div class="group-items space-y-0.5 mt-1">
           {{range .Items}}
-          <a href="/admin/{{.Slug}}" class="flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm {{if eq .Slug $.Active}}bg-primary-50 text-primary-600 font-semibold{{else}}text-slate-700 hover:bg-slate-50{{end}}">
-            <i data-lucide="{{.Icon}}" class="w-4 h-4"></i><span>{{.Label}}</span>
+          <a href="/admin/{{.Slug}}" class="flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition {{if eq .Slug $.Active}}bg-emerald-50 text-emerald-600 font-semibold ring-1 ring-emerald-200/60{{else}}text-slate-600 hover:bg-slate-50 hover:text-slate-900{{end}}">
+            <i data-lucide="{{.Icon}}" class="w-4 h-4 shrink-0"></i><span>{{.Label}}</span>
           </a>
           {{end}}
         </div>
       </div>
       {{end}}
     </nav>
-    <form action="/admin/logout" method="POST" class="px-6 py-4 border-t border-slate-100">
-      <input type="hidden" name="_csrf" value="{{.CSRF}}">
-      <button type="submit" class="group flex w-full items-center gap-x-3 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-red-600 transition-colors">
-        <i data-lucide="log-out" class="h-5 w-5 text-slate-400 group-hover:text-red-500"></i>
-        <span>Logout</span>
-      </button>
-    </form>
+
+    <div class="p-3 border-t border-slate-100">
+      <form action="/admin/logout" method="POST">
+        <input type="hidden" name="_csrf" value="{{.CSRF}}">
+        <button type="submit" class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 transition cursor-pointer">
+          <i data-lucide="log-out" class="w-4 h-4 text-slate-400"></i>
+          <span>Keluar</span>
+        </button>
+      </form>
+    </div>
   </aside>
 
-  <div class="flex-1 lg:pl-64 min-w-0">
-    <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-20">
-      <button type="button" class="lg:hidden p-2 rounded-lg hover:bg-slate-100" onclick="document.getElementById('sidebar').classList.toggle('-translate-x-full')">
-        <i data-lucide="menu" class="w-5 h-5"></i>
-      </button>
-      <div class="font-semibold text-slate-600 hidden sm:block">{{.Title}}</div>
-      {{with .User}}
+  <!-- Main Content Area -->
+  <div class="flex-1 lg:pl-64 min-w-0 flex flex-col">
+    <!-- Topbar -->
+    <header class="h-16 bg-white border-b border-slate-200/80 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-20">
       <div class="flex items-center gap-3">
-        <div class="text-right">
-          <div class="text-sm font-semibold">{{.Name}}</div>
-          <div class="text-xs text-slate-500">{{.Email}}</div>
-        </div>
-        <div class="w-9 h-9 rounded-full bg-primary-600 text-white flex items-center justify-center font-bold">{{initial .Name}}</div>
+        <button type="button" class="lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100" onclick="document.getElementById('sidebar').classList.toggle('-translate-x-full')">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
       </div>
-      {{end}}
+
+      <div class="flex items-center gap-4">
+        <div class="relative hidden sm:block">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+          <input type="text" placeholder="Search" class="pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 bg-slate-50/50 w-48 transition focus:w-64">
+        </div>
+
+        {{with .User}}
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs select-none">
+            {{initial .Name}}
+          </div>
+        </div>
+        {{else}}
+        <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs select-none">
+          A
+        </div>
+        {{end}}
+      </div>
     </header>
 
-    <main class="p-4 sm:p-8 max-w-7xl">
+    <!-- Page Body -->
+    <main class="flex-1 p-4 sm:p-8 max-w-7xl w-full">
       {{if .Flash}}
-      <div class="mb-6 rounded-lg border border-primary-100 bg-primary-50 px-4 py-3 text-sm font-medium text-primary-700 flex items-center gap-2">
-        <i data-lucide="circle-check" class="w-5 h-5"></i>{{.Flash}}
+      <div class="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 flex items-center gap-2 shadow-xs">
+        <i data-lucide="circle-check" class="w-5 h-5 text-emerald-600 shrink-0"></i>
+        <span>{{.Flash}}</span>
       </div>
       {{end}}
       {{if .FormError}}
-      <div class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{{.FormError}}</div>
+      <div class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 flex items-center gap-2 shadow-xs">
+        <i data-lucide="circle-alert" class="w-5 h-5 text-red-600 shrink-0"></i>
+        <span>{{.FormError}}</span>
+      </div>
       {{end}}
+
       {{template "content" .}}
     </main>
   </div>
 </div>
-<script>lucide.createIcons();</script>
+
+<script>
+  lucide.createIcons();
+
+  // Collapsible nav groups
+  document.querySelectorAll('.nav-group').forEach(function (group) {
+    const btn = group.querySelector('.group-toggle');
+    const items = group.querySelector('.group-items');
+    const chevron = group.querySelector('.chevron-icon');
+    if (!btn || !items) return;
+
+    btn.addEventListener('click', function () {
+      const isHidden = items.classList.toggle('hidden');
+      if (chevron) {
+        chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
+      }
+    });
+  });
+</script>
 </body>
 </html>

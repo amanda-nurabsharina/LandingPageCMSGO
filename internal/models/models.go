@@ -51,6 +51,50 @@ func (s *StringList) Scan(src any) error {
 
 func (StringList) GormDataType() string { return "json" }
 
+// JSONList is a []any persisted as a JSON array (used for repeater data such as carousel items).
+type JSONList []any
+
+func (s JSONList) Value() (driver.Value, error) {
+	if s == nil {
+		s = JSONList{}
+	}
+	b, err := json.Marshal([]any(s))
+	if err != nil {
+		return nil, err
+	}
+	return string(b), nil
+}
+
+func (s *JSONList) Scan(src any) error {
+	var raw []byte
+	switch v := src.(type) {
+	case nil:
+		*s = JSONList{}
+		return nil
+	case []byte:
+		raw = v
+	case string:
+		raw = []byte(v)
+	default:
+		return fmt.Errorf("JSONList: unsupported type %T", src)
+	}
+	if len(raw) == 0 {
+		*s = JSONList{}
+		return nil
+	}
+	var out []any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return err
+	}
+	if out == nil {
+		out = []any{}
+	}
+	*s = out
+	return nil
+}
+
+func (JSONList) GormDataType() string { return "json" }
+
 // ---------------------------------------------------------------------------
 // Models (Branch General)
 // ---------------------------------------------------------------------------
@@ -142,7 +186,7 @@ type HeroCarousel struct {
 	PrimaryBtnURL    *string    `gorm:"column:primary_btn_url;type:varchar(255)" json:"primary_btn_url"`
 	SecondaryBtnText *string    `gorm:"column:secondary_btn_text;type:varchar(255)" json:"secondary_btn_text"`
 	SecondaryBtnURL  *string    `gorm:"column:secondary_btn_url;type:varchar(255)" json:"secondary_btn_url"`
-	CarouselImages   StringList `gorm:"column:carousel_images;type:json" json:"carousel_images"`
+	CarouselImages   JSONList   `gorm:"column:carousel_images;type:json" json:"carousel_images"`
 	CreatedAt        *time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt        *time.Time `gorm:"column:updated_at" json:"updated_at"`
 }

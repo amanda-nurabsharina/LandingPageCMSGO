@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/mail"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ type FormState struct {
 	Tags   map[string][]string
 	Images map[string]string
 	Errors map[string]string
+	Repeaters map[string][]map[string]string
 }
 
 func newFormState() FormState {
@@ -33,6 +35,7 @@ func newFormState() FormState {
 		Tags:   map[string][]string{},
 		Images: map[string]string{},
 		Errors: map[string]string{},
+		Repeaters: map[string][]map[string]string{},
 	}
 }
 
@@ -48,12 +51,16 @@ type cell struct {
 	Kind ColKind
 	Text string
 	URL  string
+	On   bool
+	Name string
 }
 
 type row struct {
-	ID      string
-	EditURL string
-	Cells   []cell
+	ID        string
+	Active    bool
+	EditURL   string
+	DeleteURL string
+	Cells     []cell
 }
 
 type card struct {
@@ -108,6 +115,11 @@ func (a *Admin) list(c *fiber.Ctx) error {
 	}
 
 	q := strings.TrimSpace(c.Query("q"))
+	if r.Reorder {
+		if err := seed.ListDefaults(a.db); err != nil {
+			return err
+		}
+	}
 	sortCol := c.Query("sort")
 	dir := strings.ToLower(c.Query("dir"))
 	if dir != "desc" {
@@ -151,7 +163,11 @@ func (a *Admin) list(c *fiber.Ctx) error {
 		}
 	}
 
-	pages := int((total + perPage - 1) / perPage)
+	pp := int64(perPage)
+	if r.Reorder {
+		pp = 500
+	}
+	pages := int((total + pp - 1) / pp)
 	if pages < 1 {
 		pages = 1
 	}
@@ -160,7 +176,7 @@ func (a *Admin) list(c *fiber.Ctx) error {
 	}
 
 	var records []map[string]any
-	if err := scope(a.db.Table(r.Table)).Order(order).Limit(perPage).Offset((page - 1) * perPage).Find(&records).Error; err != nil {
+	if err := scope(a.db.Table(r.Table)).Order(order).Limit(int(pp)).Offset((page - 1) * int(pp)).Find(&records).Error; err != nil {
 		return err
 	}
 
@@ -203,15 +219,21 @@ func (a *Admin) list(c *fiber.Ctx) error {
 	var rows []row
 	for _, rec := range records {
 		id := toString(rec["id"])
-		rw := row{ID: id, EditURL: fmt.Sprintf("%s/%s/edit", base, id)}
+		rw := row{
+			ID:        id,
+			EditURL:   fmt.Sprintf("%s/%s/edit", base, id),
+			DeleteURL: fmt.Sprintf("%s/%s/delete", base, id),
+		}
 		for _, col := range r.Columns {
 			v := toString(rec[col.Name])
-			cl := cell{Kind: col.Kind, Text: v}
+			cl := cell{Kind: col.Kind, Text: v, Name: col.Name}
 			switch col.Kind {
 			case CImage:
 				if v != "" {
 					cl.URL = "/storage/" + v
 				}
+			case CToggle:
+				cl.On = v == "true" || v == "1" || v == "t"
 			case CBool:
 				if v == "true" || v == "1" || v == "t" {
 					cl.Text = "Aktif"
@@ -233,6 +255,16 @@ func (a *Admin) list(c *fiber.Ctx) error {
 		rows = append(rows, rw)
 	}
 
+	from := (page-1)*int(pp) + 1
+	to := page * int(pp)
+	if int64(to) > total {
+		to = int(total)
+	}
+	if total == 0 {
+		from = 0
+		to = 0
+	}
+
 	data := fiber.Map{
 		"Title":    r.Label,
 		"Active":   r.Slug,
@@ -243,6 +275,8 @@ func (a *Admin) list(c *fiber.Ctx) error {
 		"Total":    total,
 		"Page":     page,
 		"Pages":    pages,
+		"From":     from,
+		"To":       to,
 	}
 	if page > 1 {
 		data["PrevURL"] = buildURL(sortCol, dir, page-1)
@@ -262,7 +296,7 @@ func (a *Admin) createPage(c *fiber.Ctx) error {
 	if r == nil {
 		return fiber.ErrNotFound
 	}
-	if r.Singleton {
+	if r.Singleton || r.NoCreate {
 		return c.Redirect("/admin/" + r.Slug)
 	}
 	st := newFormState()
@@ -289,7 +323,7 @@ func (a *Admin) store_(c *fiber.Ctx) error {
 	if r == nil {
 		return fiber.ErrNotFound
 	}
-	if r.Singleton {
+	if r.Singleton || r.NoCreate {
 		return c.Redirect("/admin/" + r.Slug)
 	}
 
@@ -357,6 +391,8 @@ func (a *Admin) editPage(c *fiber.Ctx) error {
 			st.Tags[f.Name] = parseTags(rec[f.Name])
 		case FImage:
 			st.Images[f.Name] = toString(rec[f.Name])
+		case FRepeater:
+			st.Repeaters[f.Name] = repeaterItems(rec[f.Name])
 		default:
 			st.Values[f.Name] = toString(rec[f.Name])
 		}
@@ -401,8 +437,8 @@ func (a *Admin) destroy(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if r.Singleton {
-		return fiber.NewError(fiber.StatusForbidden, "Data pengaturan tidak dapat dihapus.")
+	if r.Singleton || r.NoCreate {
+		return fiber.NewError(fiber.StatusForbidden, "Data ini tidak dapat dihapus.")
 	}
 	if err := a.db.Exec(fmt.Sprintf(`DELETE FROM "%s" WHERE id = ?`, r.Table), id).Error; err != nil {
 		return err
@@ -419,8 +455,8 @@ func (a *Admin) bulkDelete(c *fiber.Ctx) error {
 	if r == nil {
 		return fiber.ErrNotFound
 	}
-	if r.Singleton {
-		return fiber.NewError(fiber.StatusForbidden, "Data pengaturan tidak dapat dihapus.")
+	if r.Singleton || r.NoCreate {
+		return fiber.NewError(fiber.StatusForbidden, "Data ini tidak dapat dihapus.")
 	}
 
 	var ids []int
@@ -464,7 +500,7 @@ func (a *Admin) renderForm(c *fiber.Ctx, r *Resource, st FormState, id int) erro
 	if id > 0 {
 		data["Title"] = "Edit " + r.Singular
 		data["Action"] = fmt.Sprintf("/admin/%s/%d", r.Slug, id)
-		if !r.Singleton {
+		if !r.Singleton && !r.NoCreate {
 			data["DeleteURL"] = fmt.Sprintf("/admin/%s/%d/delete", r.Slug, id)
 		}
 	} else {
@@ -500,6 +536,8 @@ func (a *Admin) parseForm(c *fiber.Ctx, r *Resource, existing map[string]any) (d
 	}
 
 	pendingUploads := map[string]*multipart.FileHeader{}
+	repPending := map[string]*multipart.FileHeader{}
+	var repOrder []string
 
 	for _, f := range r.Fields {
 		label := f.DisplayLabel()
@@ -553,6 +591,15 @@ func (a *Admin) parseForm(c *fiber.Ctx, r *Resource, existing map[string]any) (d
 				st.Errors[f.Name] = label + " wajib diunggah."
 			}
 
+				case FRepeater:
+			items, errMsg := parseRepeater(form, f, existing[f.Name], repPending)
+			st.Repeaters[f.Name] = items
+			if errMsg != "" {
+				st.Errors[f.Name] = errMsg
+				continue
+			}
+			repOrder = append(repOrder, f.Name)
+
 		case FNumber, FSelect:
 			v := get(f.Name)
 			st.Values[f.Name] = v
@@ -564,13 +611,22 @@ func (a *Admin) parseForm(c *fiber.Ctx, r *Resource, existing map[string]any) (d
 				}
 				continue
 			}
+			if f.Type == FSelect {
+				if !hasOption(f.Options, v) {
+					st.Errors[f.Name] = "Pilihan " + label + " tidak valid."
+					continue
+				}
+				if _, convErr := strconv.Atoi(v); convErr == nil && f.Name == "stars" {
+					n, _ := strconv.Atoi(v)
+					data[f.Name] = n
+				} else {
+					data[f.Name] = v
+				}
+				continue
+			}
 			n, convErr := strconv.Atoi(v)
 			if convErr != nil {
 				st.Errors[f.Name] = label + " harus berupa angka."
-				continue
-			}
-			if f.Type == FSelect && !hasOption(f.Options, v) {
-				st.Errors[f.Name] = "Pilihan " + label + " tidak valid."
 				continue
 			}
 			data[f.Name] = n
@@ -614,6 +670,43 @@ func (a *Admin) parseForm(c *fiber.Ctx, r *Resource, existing map[string]any) (d
 
 	if len(st.Errors) > 0 {
 		return data, st, nil, nil, false, nil
+	}
+
+		// Repeater items: store uploads, build JSON value, queue removed images.
+	for _, name := range repOrder {
+		fld := r.field(name)
+		items := st.Repeaters[name]
+		out := make(models.JSONList, 0, len(items))
+		kept := map[string]bool{}
+		for i, it := range items {
+			img := it["image"]
+			if fh := repPending[fmt.Sprintf("%s[%d]", name, i)]; fh != nil {
+				var dir string
+				for _, sf := range fld.Sub {
+					if sf.Name == "image" {
+						dir = sf.Dir
+					}
+				}
+				path, upErr := a.storage.SaveImage(fh, dir)
+				if upErr != nil {
+					st.Errors[name] = "Gambar item " + strconv.Itoa(i+1) + ": " + upErr.Error()
+					break
+				}
+				newFiles = append(newFiles, path)
+				img = path
+			}
+			kept[img] = true
+			out = append(out, map[string]any{"image": img, "title": it["title"], "subtitle": it["subtitle"], "footer": it["footer"]})
+		}
+		if st.Errors[name] != "" {
+			continue
+		}
+		for _, old := range repeaterItems(existing[name]) {
+			if old["image"] != "" && !kept[old["image"]] {
+				oldFiles = append(oldFiles, old["image"])
+			}
+		}
+		data[name] = out
 	}
 
 	// Store uploads only after validation passed.
@@ -685,4 +778,144 @@ func parseTags(v any) []string {
 		_ = json.Unmarshal([]byte(s), &out)
 	}
 	return out
+}
+
+// repeaterItems converts a stored JSON array into editable string maps.
+func repeaterItems(v any) []map[string]string {
+	var raw []any
+	switch t := v.(type) {
+	case nil:
+		return nil
+	case []any:
+		raw = t
+	default:
+		if s := toString(v); s != "" {
+			_ = json.Unmarshal([]byte(s), &raw)
+		}
+	}
+	out := make([]map[string]string, 0, len(raw))
+	for _, x := range raw {
+		switch it := x.(type) {
+		case string:
+			out = append(out, map[string]string{"image": it, "title": "", "subtitle": "", "footer": ""})
+		case map[string]any:
+			out = append(out, map[string]string{
+				"image":    toString(it["image"]),
+				"title":    toString(it["title"]),
+				"subtitle": toString(it["subtitle"]),
+				"footer":   toString(it["footer"]),
+			})
+		}
+	}
+	return out
+}
+
+// parseRepeater reads items named `field[idx][sub]` from the multipart form.
+func parseRepeater(form *multipart.Form, f Field, existing any, pending map[string]*multipart.FileHeader) ([]map[string]string, string) {
+	prefix := f.Name + "["
+	idxSet := map[int]bool{}
+	collect := func(key string) {
+		if !strings.HasPrefix(key, prefix) {
+			return
+		}
+		rest := key[len(prefix):]
+		end := strings.Index(rest, "]")
+		if end <= 0 {
+			return
+		}
+		if n, err := strconv.Atoi(rest[:end]); err == nil {
+			idxSet[n] = true
+		}
+	}
+	for k := range form.Value {
+		collect(k)
+	}
+	for k := range form.File {
+		collect(k)
+	}
+	var idxs []int
+	for n := range idxSet {
+		idxs = append(idxs, n)
+	}
+	sort.Ints(idxs)
+
+	val := func(i int, sub string) string {
+		if v := form.Value[fmt.Sprintf("%s[%d][%s]", f.Name, i, sub)]; len(v) > 0 {
+			return strings.TrimSpace(v[0])
+		}
+		return ""
+	}
+	var items []map[string]string
+	errMsg := ""
+	for pos, i := range idxs {
+		it := map[string]string{
+			"image":    val(i, "image_existing"),
+			"title":    val(i, "title"),
+			"subtitle": val(i, "subtitle"),
+			"footer":   val(i, "footer"),
+		}
+		hasNew := false
+		if files := form.File[fmt.Sprintf("%s[%d][image]", f.Name, i)]; len(files) > 0 && files[0].Size > 0 {
+			pending[fmt.Sprintf("%s[%d]", f.Name, pos)] = files[0]
+			hasNew = true
+		}
+		if errMsg == "" {
+			switch {
+			case it["image"] == "" && !hasNew:
+				errMsg = fmt.Sprintf("Item %d: Gambar Produk wajib diunggah.", pos+1)
+			case it["title"] == "":
+				errMsg = fmt.Sprintf("Item %d: Nama Produk / Label Utama wajib diisi.", pos+1)
+			}
+		}
+		items = append(items, it)
+	}
+	return items, errMsg
+}
+
+// toggle sets a boolean column (inline switch in list views).
+func (a *Admin) toggle(c *fiber.Ctx) error {
+	r := findResource(c.Params("slug"))
+	if r == nil {
+		return fiber.ErrNotFound
+	}
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil || id <= 0 {
+		return fiber.ErrNotFound
+	}
+	field := c.FormValue("field")
+	col := r.column(field)
+	if col == nil || col.Kind != CToggle {
+		return fiber.ErrBadRequest
+	}
+	on := c.FormValue("value") == "true"
+	if err := a.db.Table(r.Table).Where("id = ?", id).Updates(map[string]any{field: on, "updated_at": time.Now()}).Error; err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"ok": true, "value": on})
+}
+
+// reorder stores the new order (ids in display order) into sort_order.
+func (a *Admin) reorder(c *fiber.Ctx) error {
+	r := findResource(c.Params("slug"))
+	if r == nil || !r.Reorder {
+		return fiber.ErrNotFound
+	}
+	var ids []int
+	for _, raw := range c.Request().PostArgs().PeekMulti("ids") {
+		if n, err := strconv.Atoi(string(raw)); err == nil && n > 0 {
+			ids = append(ids, n)
+		}
+	}
+	err := a.db.Transaction(func(tx *gorm.DB) error {
+		for pos, id := range ids {
+			if err := tx.Table(r.Table).Where("id = ?", id).Update("sort_order", pos+1).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"ok": true})
 }

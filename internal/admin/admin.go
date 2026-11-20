@@ -87,7 +87,9 @@ func Register(app *fiber.App, db *gorm.DB, cfg *config.Config, st *storage.Stora
 	g.Get("/:slug", a.requireAuth, a.list)
 	g.Get("/:slug/create", a.requireAuth, a.createPage)
 	g.Post("/:slug/bulk-delete", a.requireAuth, a.bulkDelete)
+	g.Post("/:slug/reorder", a.requireAuth, a.reorder)
 	g.Post("/:slug", a.requireAuth, a.store_)
+	g.Post("/:slug/:id/toggle", a.requireAuth, a.toggle)
 	g.Get("/:slug/:id/edit", a.requireAuth, a.editPage)
 	g.Post("/:slug/:id/delete", a.requireAuth, a.destroy)
 	g.Post("/:slug/:id", a.requireAuth, a.update)
@@ -140,6 +142,7 @@ func (a *Admin) render(c *fiber.Ctx, page string, data fiber.Map) error {
 	data["CSRF"], _ = c.Locals(csrfKey).(string)
 	data["Nav"] = Resources
 	data["GroupedNav"] = GroupedNav()
+	data["UngroupedNav"] = UngroupedNav()
 	if u, ok := c.Locals("user").(*models.User); ok {
 		data["User"] = u
 	}

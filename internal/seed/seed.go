@@ -113,7 +113,7 @@ func Singletons(db *gorm.DB) (*models.SiteConfig, *models.HeroSection, *models.H
 		PrimaryBtnURL:    models.Str("whatsapp"),
 		SecondaryBtnText: models.Str("Layanan Kami"),
 		SecondaryBtnURL:  models.Str("#services"),
-		CarouselImages:   models.StringList{},
+		CarouselImages:   models.JSONList{},
 		CreatedAt:        now(),
 		UpdatedAt:        now(),
 	}).FirstOrCreate(&heroCarousel)
@@ -240,28 +240,47 @@ func ListDefaults(db *gorm.DB) error {
 		}
 	}
 
-	if err := db.Model(&models.LandingSection{}).Count(&count).Error; err != nil {
-		return err
+	// Landing sections: ensure every section exists (same keys / order / titles as the previous CMS).
+	sectionDefaults := []models.LandingSection{
+		{SectionKey: "hero", Title: "Hero (Judul Utama & Banner)", IsActive: true, SortOrder: 1},
+		{SectionKey: "statistics", Title: "Statistik Bar (Pencapaian)", IsActive: true, SortOrder: 2},
+		{SectionKey: "services", Title: "Layanan Cetak (Services)", IsActive: true, SortOrder: 3},
+		{SectionKey: "benefits", Title: "Keunggulan Kami (Why Choose Us)", IsActive: true, SortOrder: 4},
+		{SectionKey: "portfolio", Title: "Galeri Portofolio", IsActive: true, SortOrder: 5},
+		{SectionKey: "timeline", Title: "Langkah Pemesanan (Cara Pesan)", IsActive: true, SortOrder: 6},
+		{SectionKey: "testimonials", Title: "Testimoni Pelanggan", IsActive: true, SortOrder: 7},
+		{SectionKey: "cta", Title: "Banner Hubungi Kami (CTA)", IsActive: true, SortOrder: 8},
+		{SectionKey: "news", Title: "Berita Terbaru", IsActive: true, SortOrder: 9},
+		{SectionKey: "activities", Title: "Aktifitas Terbaru", IsActive: true, SortOrder: 10},
+		{SectionKey: "contact", Title: "Formulir Kontak (Leads)", IsActive: true, SortOrder: 11},
+		{SectionKey: "hero_background", Title: "Hero Background Image (Latar Penuh)", IsActive: false, SortOrder: 12},
+		{SectionKey: "hero_carousel", Title: "Hero Carousel Image (Slideshow)", IsActive: false, SortOrder: 13},
+		{SectionKey: "about", Title: "Tentang Kami", IsActive: true, SortOrder: 14},
+		{SectionKey: "services_premium", Title: "Layanan Premium (Grid)", IsActive: true, SortOrder: 15},
+		{SectionKey: "work_steps", Title: "Cara Kerja (Grid)", IsActive: true, SortOrder: 16},
+		{SectionKey: "branches", Title: "Lokasi Cabang Kami (Google Maps)", IsActive: true, SortOrder: 17},
+		{SectionKey: "clients", Title: "Daftar Klien Kami (Logos Slider)", IsActive: true, SortOrder: 18},
 	}
-	if count == 0 {
-		rows := []models.LandingSection{
-			{SectionKey: "hero", Title: "Hero (Judul Utama & Banner)", IsActive: true, SortOrder: 1},
-			{SectionKey: "statistics", Title: "Statistik Bar (Pencapaian)", IsActive: true, SortOrder: 2},
-			{SectionKey: "services", Title: "Layanan Kami (Services)", IsActive: true, SortOrder: 3},
-			{SectionKey: "benefits", Title: "Keunggulan Kami (Why Choose Us)", IsActive: true, SortOrder: 4},
-			{SectionKey: "portfolio", Title: "Galeri Portofolio", IsActive: true, SortOrder: 5},
-			{SectionKey: "timeline", Title: "Alur Kerja (Work Steps)", IsActive: true, SortOrder: 6},
-			{SectionKey: "testimonials", Title: "Testimoni Klien & Mitra", IsActive: true, SortOrder: 7},
-			{SectionKey: "cta", Title: "Banner Hubungi Kami (CTA)", IsActive: true, SortOrder: 8},
-		}
-		for i := range rows {
-			rows[i].CreatedAt, rows[i].UpdatedAt = now(), now()
-		}
-		if err := db.Create(&rows).Error; err != nil {
+	for _, d := range sectionDefaults {
+		var n int64
+		if err := db.Model(&models.LandingSection{}).Where("section_key = ?", d.SectionKey).Count(&n).Error; err != nil {
 			return err
 		}
+		if n == 0 {
+			d.CreatedAt, d.UpdatedAt = now(), now()
+			if err := db.Create(&d).Error; err != nil {
+				return err
+			}
+		}
 	}
-
+	// Align titles seeded by the earlier Go version with the previous CMS wording.
+	for key, titles := range map[string][2]string{
+		"services":     {"Layanan Kami (Services)", "Layanan Cetak (Services)"},
+		"timeline":     {"Alur Kerja (Work Steps)", "Langkah Pemesanan (Cara Pesan)"},
+		"testimonials": {"Testimoni Klien & Mitra", "Testimoni Pelanggan"},
+	} {
+		db.Model(&models.LandingSection{}).Where("section_key = ? AND title = ?", key, titles[0]).Update("title", titles[1])
+	}
 	if err := db.Model(&models.AboutItem{}).Count(&count).Error; err != nil {
 		return err
 	}
